@@ -1,0 +1,21 @@
+# Secrets — never commit, even to a private fork.
+# Hermes reads the API key from here (mounted as ~/.hermes/.env in the container).
+.env
+.hermes/.env
+*.env
+!*.env.example
+
+# Hermes runtime data — keep your config.yaml, ignore the generated/session state.
+.hermes/sessions/
+.hermes/logs/
+.hermes/trajectories/
+.hermes/cache/
+.hermes/*.log
+
+# IDE / editor
+.idea/
+.vscode/
+
+# OS noise
+.DS_Store
+Thumbs.db

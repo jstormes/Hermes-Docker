@@ -1,0 +1,53 @@
+#
+# docker-compose.windows.yml — Windows Docker Desktop compatible
+#
+# Differences from docker-compose.yml:
+#   - Removes `network_mode: host` (not supported on Docker Desktop for Windows)
+#   - Uses explicit port mappings instead
+#   - Uses Windows-style volume path for ~/.hermes
+#
+# Usage:
+#   docker compose -f docker-compose.windows.yml up -d
+#
+# SECURITY: the dashboard runs with --insecure (no auth) and the Dockerfile
+# patches its WS gate so the embedded chat works behind Docker's NAT. Reaching
+# the dashboard therefore grants a full agent session (shell + access to the
+# mounted repo). The "127.0.0.1:" prefix on the port mapping below is the only
+# thing keeping this off the LAN — keep it. Never change it to "9119:9119" or
+# "0.0.0.0:..."; for network exposure switch to gated OAuth mode instead.
+#
+services:
+  gateway:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: hermes
+    restart: unless-stopped
+    volumes:
+      - .hermes:/opt/data
+      - .:/projects
+    environment:
+      - HERMES_UID=10000
+      - HERMES_GID=10000
+    command: ["gateway", "run"]
+
+  dashboard:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: hermes-dashboard
+    restart: unless-stopped
+    depends_on:
+      - gateway
+    volumes:
+      - .hermes:/opt/data
+      - .:/projects
+    environment:
+      - HERMES_UID=10000
+      - HERMES_GID=10000
+      - HERMES_DASHBOARD_HOST=0.0.0.0
+      - API_SERVER_ENABLED=true
+      - API_SERVER_KEY=hermes-dashboard-key
+    ports:
+      - "127.0.0.1:9119:9119"
+    command: ["dashboard", "--host", "0.0.0.0", "--port", "9119", "--no-open", "--insecure", "--tui"]

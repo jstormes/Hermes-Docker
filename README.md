@@ -35,7 +35,7 @@ This repo bundles a `Dockerfile` (Hermes base image + the system/Python tools it
 
    | Wizard prompt | Answer |
    |---|---|
-   | Provider type | **Custom / OpenAI-compatible** |
+   | Provider type | **Custom (direct API)** — labelled "Custom / OpenAI-compatible" in some versions |
    | Base URL | `https://llm.stormes.net/v1` |
    | API key | your `llm.stormes.net` bearer key |
    | Default model | `Qwen3.6-35B-A3B-Q8-8060S` |
@@ -53,6 +53,8 @@ This repo bundles a `Dockerfile` (Hermes base image + the system/Python tools it
    ```
 
    This starts two services: `gateway` (the agent runtime) and `dashboard` (the web UI + embedded chat).
+
+   > **Note:** the first startup takes a few minutes while the images build and the services initialize. Subsequent starts are much faster.
 
 6. **Open the dashboard:** <http://127.0.0.1:9119>
 

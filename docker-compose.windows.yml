@@ -25,10 +25,14 @@ services:
     restart: unless-stopped
     volumes:
       - .hermes:/opt/data
-      - .:/projects
+      - ./hermes:/opt/hermes
+#      - .:/projects
     environment:
       - HERMES_UID=10000
       - HERMES_GID=10000
+      # Provider API key — supplied from the project-root .env (git-ignored).
+      # Copy .env.example to .env and fill it in. Keeps the key out of config.yaml.
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
     command: ["gateway", "run"]
 
   dashboard:
@@ -41,13 +45,15 @@ services:
       - gateway
     volumes:
       - .hermes:/opt/data
-      - .:/projects
+#      - .:/projects
     environment:
       - HERMES_UID=10000
       - HERMES_GID=10000
       - HERMES_DASHBOARD_HOST=0.0.0.0
       - API_SERVER_ENABLED=true
       - API_SERVER_KEY=hermes-dashboard-key
+      # Provider API key — supplied from the project-root .env (git-ignored).
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
     ports:
       - "127.0.0.1:9119:9119"
     command: ["dashboard", "--host", "0.0.0.0", "--port", "9119", "--no-open", "--insecure", "--tui"]

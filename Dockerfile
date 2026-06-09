@@ -23,6 +23,9 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libwayland-client0 libxshmfence1 fonts-liberation \
     && rm -rf /var/lib/apt/lists/*
 
+# Claude Code CLI (installed globally via npm; needs the nodejs/npm above)
+RUN npm install -g @anthropic-ai/claude-code
+
 # Python packages (uv) — optional toolsets detected at import time
 RUN uv pip install --python /opt/hermes/.venv/bin/python3 --no-cache \
     ddgs                        \

@@ -42,7 +42,15 @@ This repo bundles a `Dockerfile` (Hermes base image + the system/Python tools it
 
    (Exact prompts vary by Hermes version. You can re-run the wizard, or use `hermes model` / `hermes config set`, at any time to change these.) This produces `.hermes/config.yaml` in the repo.
 
-   **Your API key goes in the environment, not the config.** When the wizard asks for the key it stores it in `.hermes/.env` (loaded as `~/.hermes/.env` in the containers), not in `config.yaml`. You can also write it yourself — `OPENAI_API_KEY=<your-bearer-key>` in `.hermes/.env`. This file is git-ignored; keep the key out of `config.yaml`. See [Hermes configuration → API key](#hermes-configuration) for details.
+   **Your API key goes in the environment, not the config.** The recommended way is the project-root `.env` that Docker Compose loads automatically: copy `.env.example` to `.env` and set `OPENAI_API_KEY=<your-bearer-key>`. Compose injects it into both containers, so the key never lands in `config.yaml` (or git — `.env` is git-ignored).
+
+      ```bash
+      cp .env.example .env      # then edit .env and paste your key
+      ```
+
+      > **Note:** the wizard may write `api_key:` directly into `.hermes/config.yaml`. If it does, delete that line — the `OPENAI_API_KEY` from `.env` takes precedence, and you want the secret out of the YAML.
+
+      See [Hermes configuration → API key](#hermes-configuration) for the full rationale and alternatives.
 
 4. **(Recommended) Refine the generated config.** Open `.hermes/config.yaml` and add the fleet-specific bits the wizard doesn't cover: per-task model routing (see [Hermes configuration](#hermes-configuration) and [Model recommendations for Hermes](#model-recommendations-for-hermes)) and the `thinking_budget_tokens` / `custom_providers` settings that stop the Qwen models from looping (see [Reasoning-loop mitigation](#reasoning-loop-mitigation)).
 
@@ -167,16 +175,27 @@ auxiliary:
     model: Gemma-4-26B-A4B-Q8-8060S
 ```
 
-**API key (via environment / `.env`).** Hermes reads provider keys from the environment or a `.env` file and **`.env` takes precedence over `config.yaml`** — this is the recommended place, so the key never lands in the YAML (or in git). Don't hardcode `api_key:` and don't try `${VAR}` interpolation in the YAML — this Hermes version doesn't expand it; it falls back to the provider's env var instead.
+**API key (via environment / `.env`).** Hermes reads provider keys from the process environment, and **the environment takes precedence over `config.yaml`** — so the key never has to land in the YAML (or in git). Don't hardcode `api_key:` and don't try `${VAR}` interpolation in the YAML — this Hermes version doesn't expand it; it falls back to the provider's env var instead. For a custom / OpenAI-compatible provider that env var is `OPENAI_API_KEY`.
 
-The `.env` Hermes loads is `~/.hermes/.env`, which in this Docker setup is the already-mounted `.hermes/.env` (the `.hermes` volume maps to the container's Hermes home). Create it with the env var your provider expects — for a generic custom / OpenAI-compatible provider that's `OPENAI_API_KEY`:
+**Recommended: the project-root `.env` (loaded by Docker Compose).** Docker Compose automatically reads a `.env` file sitting next to `docker-compose.windows.yml` and injects it into both containers. The compose file passes `OPENAI_API_KEY` straight through, so this is the simplest path and keeps the key entirely out of the `.hermes` tree:
 
 ```bash
-# .hermes/.env   →   mounted as ~/.hermes/.env inside both containers
+# .env   (project root, next to the compose file — git-ignored)
 OPENAI_API_KEY=<your-llm.stormes.net-bearer-key>
 ```
 
-> The `hermes setup` wizard writes this for you when you paste the key, using the correct variable name for the provider you pick — so the simplest path is to let the wizard create it. The key is forwarded as a standard `Authorization: Bearer` header. **`.hermes/.env` is git-ignored** (see [`.gitignore`](./.gitignore)); keep it that way even in a private fork.
+```bash
+cp .env.example .env      # then edit .env
+docker compose -f docker-compose.windows.yml up -d   # Compose injects the key
+```
+
+> If the `hermes setup` wizard wrote `api_key:` into `.hermes/config.yaml`, delete that line. The `OPENAI_API_KEY` from the environment wins regardless, but you want the secret out of the YAML.
+
+**Alternative: `.hermes/.env`.** Hermes also reads `~/.hermes/.env`, which in this Docker setup is the already-mounted `.hermes/.env` (the `.hermes` volume maps to the container's Hermes home). The wizard writes this for you when you paste the key. Either location works — the project-root `.env` is just less to think about.
+
+The key is forwarded to the provider as a standard `Authorization: Bearer` header. **Both `.env` and `.hermes/.env` are git-ignored** (see [`.gitignore`](./.gitignore)); keep it that way even in a private fork.
+
+> **The project-root `.env` is the home for any secret env var.** Anything you want to set but keep out of the git repo — additional API keys, tokens, local overrides — belongs in `.env`, not in a tracked file. To actually pass one into the containers, also reference it in `docker-compose.windows.yml` under each service's `environment:` (e.g. `- MY_VAR=${MY_VAR:-}`).
 
 See [Model recommendations for Hermes](#model-recommendations-for-hermes) for which model to put on each auxiliary slot, and [Reasoning-loop mitigation](#reasoning-loop-mitigation) for the `thinking_budget_tokens` / `custom_providers` settings that stop the Qwen models from looping.
 

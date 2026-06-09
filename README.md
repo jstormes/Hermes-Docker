@@ -19,13 +19,21 @@ This repo bundles a `Dockerfile` (Hermes base image + the system/Python tools it
    cd Hermes-Docker
    ```
 
-2. **Build the image:**
+2. **Set up your `.env`.** Copy the template and fill it in — Docker Compose loads this file automatically and injects the values into both containers, so your secrets stay out of `config.yaml` and out of git (`.env` is git-ignored). Do this **before** the wizard so it can pre-fill from these values.
+
+   ```bash
+   cp .env.example .env      # then edit .env
+   ```
+
+   At minimum set `OPENAI_API_KEY` (your `llm.stormes.net` bearer key). The template also includes `OPENAI_BASE_URL` (pre-filled to the fleet endpoint — pre-fills the wizard) and an optional `CLAUDE_CODE_OAUTH_TOKEN` ([use Claude Code in the container](#using-claude-code-in-the-container)). See [Hermes configuration → API key](#hermes-configuration) for the full rationale.
+
+3. **Build the image:**
 
    ```bash
    docker compose -f docker-compose.windows.yml build
    ```
 
-3. **Run Hermes' setup wizard.** Hermes ships an interactive wizard (`hermes setup`) that writes `config.yaml` for you — don't hand-author it. Run it through the `gateway` service so it writes into the mounted `.hermes` volume (the compose file mounts `./.hermes` → `/opt/data`, which is where both containers read their config):
+4. **Run Hermes' setup wizard.** Hermes ships an interactive wizard (`hermes setup`) that writes `config.yaml` for you — don't hand-author it. Run it through the `gateway` service so it writes into the mounted `.hermes` volume (the compose file mounts `./.hermes` → `/opt/data`, which is where both containers read their config):
 
    ```bash
    docker compose -f docker-compose.windows.yml run --rm -it gateway setup
@@ -36,25 +44,19 @@ This repo bundles a `Dockerfile` (Hermes base image + the system/Python tools it
    | Wizard prompt | Answer |
    |---|---|
    | Provider type | **Custom (direct API)** — labelled "Custom / OpenAI-compatible" in some versions |
-   | Base URL | `https://llm.stormes.net/v1` |
-   | API key | your `llm.stormes.net` bearer key |
+   | Base URL | `https://llm.stormes.net/v1` (pre-filled if you set `OPENAI_BASE_URL` in `.env` — just press Enter) |
+   | API key | your `llm.stormes.net` bearer key (leave blank if it's in `.env`) |
    | Default model | `Qwen3.6-35B-A3B-Q8-8060S` |
 
    (Exact prompts vary by Hermes version. You can re-run the wizard, or use `hermes model` / `hermes config set`, at any time to change these.) This produces `.hermes/config.yaml` in the repo.
 
-   **Your API key goes in the environment, not the config.** The recommended way is the project-root `.env` that Docker Compose loads automatically: copy `.env.example` to `.env` and set `OPENAI_API_KEY=<your-bearer-key>`. Compose injects it into both containers, so the key never lands in `config.yaml` (or git — `.env` is git-ignored).
+   > **Tip:** because you filled in `.env` in step 2, the wizard reads `OPENAI_BASE_URL` / `OPENAI_API_KEY` from the environment and offers them as the bracketed defaults — press Enter at the base-URL prompt to accept, and leave the key prompt blank so the secret stays in `.env` instead of `config.yaml`.
 
-      ```bash
-      cp .env.example .env      # then edit .env and paste your key
-      ```
+   > **Note:** the wizard may still write `api_key:` directly into `.hermes/config.yaml`. If it does, delete that line — the `OPENAI_API_KEY` from `.env` takes precedence, and you want the secret out of the YAML.
 
-      > **Note:** the wizard may write `api_key:` directly into `.hermes/config.yaml`. If it does, delete that line — the `OPENAI_API_KEY` from `.env` takes precedence, and you want the secret out of the YAML.
+5. **(Recommended) Refine the generated config.** Open `.hermes/config.yaml` and add the fleet-specific bits the wizard doesn't cover: per-task model routing (see [Hermes configuration](#hermes-configuration) and [Model recommendations for Hermes](#model-recommendations-for-hermes)) and the `thinking_budget_tokens` / `custom_providers` settings that stop the Qwen models from looping (see [Reasoning-loop mitigation](#reasoning-loop-mitigation)).
 
-      See [Hermes configuration → API key](#hermes-configuration) for the full rationale and alternatives.
-
-4. **(Recommended) Refine the generated config.** Open `.hermes/config.yaml` and add the fleet-specific bits the wizard doesn't cover: per-task model routing (see [Hermes configuration](#hermes-configuration) and [Model recommendations for Hermes](#model-recommendations-for-hermes)) and the `thinking_budget_tokens` / `custom_providers` settings that stop the Qwen models from looping (see [Reasoning-loop mitigation](#reasoning-loop-mitigation)).
-
-5. **Start the services:**
+6. **Start the services:**
 
    ```bash
    docker compose -f docker-compose.windows.yml up -d
@@ -64,11 +66,11 @@ This repo bundles a `Dockerfile` (Hermes base image + the system/Python tools it
 
    > **Note:** the first startup takes a few minutes while the images build and the services initialize. Subsequent starts are much faster.
 
-6. **Open the dashboard:** <http://127.0.0.1:9119>
+7. **Open the dashboard:** <http://127.0.0.1:9119>
 
    The dashboard is published to **host loopback only** (`127.0.0.1:9119`). The embedded chat tab (`--tui`) gives a full agent session — shell and file access to the mounted repo — so keep it on loopback.
 
-7. **Stop / rebuild:**
+8. **Stop / rebuild:**
 
    ```bash
    docker compose -f docker-compose.windows.yml down          # stop
@@ -81,11 +83,45 @@ This repo bundles a `Dockerfile` (Hermes base image + the system/Python tools it
 
 | File | Purpose |
 |---|---|
-| `Dockerfile` | Hermes base image + tmux, ffmpeg, espeak-ng, Chromium, Node, `jq`, and Python extras (`ddgs`, `scipy`) that Hermes skills detect at import time. Also applies the WS-loopback patch at build time. |
+| `Dockerfile` | Hermes base image + tmux, ffmpeg, espeak-ng, Chromium, Node, `jq`, the Claude Code CLI, and Python extras (`ddgs`, `scipy`) that Hermes skills detect at import time. Also applies the WS-loopback patch at build time. |
 | `docker-compose.windows.yml` | Windows Docker Desktop compose (explicit port maps instead of `network_mode: host`). Defines the `gateway` + `dashboard` services. |
 | `patch-ws-loopback.py` | Build-time patch to Hermes' dashboard WS gate so the `--tui` chat works behind Docker's NAT. Idempotent; fails loudly if the upstream anchor changes. |
-| `.hermes/` | Your Hermes data + `config.yaml` (mounted into both containers; generated by `hermes setup` — see [Quick start](#quick-start) step 3). The API key lives in `.hermes/.env`. |
+| `.hermes/` | Your Hermes data + `config.yaml` (mounted into both containers; generated by `hermes setup` — see [Quick start](#quick-start) step 4). The API key lives in `.hermes/.env`. |
+| `.env` / `.env.example` | Project-root env file Docker Compose loads automatically; holds `OPENAI_API_KEY`, `OPENAI_BASE_URL`, the optional `CLAUDE_CODE_OAUTH_TOKEN`, and any other secret env vars. Copy the example to `.env` and fill it in. Git-ignored. |
 | `.gitignore` | Keeps secrets (`.env`, `.hermes/.env`) and runtime state out of git. |
+
+---
+
+## Using Claude Code in the container
+
+The image ships the [Claude Code](https://claude.com/claude-code) CLI (installed in the `Dockerfile`), so you can run `claude` inside either container — e.g. from the dashboard's embedded chat shell or via `docker compose -f docker-compose.windows.yml exec dashboard claude`.
+
+To authenticate it as your **logged-in Claude Pro/Max account** without a browser login inside Docker, use a long-lived OAuth token:
+
+1. On your host (where a browser is available), generate the token:
+
+   ```bash
+   claude setup-token
+   ```
+
+   This opens a browser, you authorize with your account, and it prints a ~1-year token. Requires a Pro/Max/Team/Enterprise subscription.
+
+2. Put it in the project-root `.env` (git-ignored):
+
+   ```bash
+   # .env
+   CLAUDE_CODE_OAUTH_TOKEN=<token from setup-token>
+   ```
+
+3. Recreate the containers so Compose injects it:
+
+   ```bash
+   docker compose -f docker-compose.windows.yml up -d
+   ```
+
+`claude` inside the container now picks up `CLAUDE_CODE_OAUTH_TOKEN` from the environment — no `/login` needed.
+
+> **Notes.** The token is inference-scoped (fine for normal use; it can't establish Remote Control sessions), and `claude --bare` ignores it. This is independent of `OPENAI_API_KEY` — that key drives the Hermes fleet and Claude Code ignores it, so the two coexist. Treat the token like a password.
 
 ---
 
@@ -151,7 +187,7 @@ Hardware / context / vision per base model are in the table above (the `-code` /
 
 ## Hermes configuration
 
-The fastest way to create a valid config is Hermes' own setup wizard — `docker compose -f docker-compose.windows.yml run --rm -it gateway setup` ([Quick start](#quick-start) step 3). It writes `.hermes/config.yaml` for you; the blocks below are what to set/refine afterward.
+The fastest way to create a valid config is Hermes' own setup wizard — `docker compose -f docker-compose.windows.yml run --rm -it gateway setup` ([Quick start](#quick-start) step 4). It writes `.hermes/config.yaml` for you; the blocks below are what to set/refine afterward.
 
 Hermes uses a custom (OpenAI-compatible) provider pointed at the endpoint. In `.hermes/config.yaml` (mounted into the containers — see [Quick start](#quick-start)):
 
@@ -177,25 +213,19 @@ auxiliary:
 
 **API key (via environment / `.env`).** Hermes reads provider keys from the process environment, and **the environment takes precedence over `config.yaml`** — so the key never has to land in the YAML (or in git). Don't hardcode `api_key:` and don't try `${VAR}` interpolation in the YAML — this Hermes version doesn't expand it; it falls back to the provider's env var instead. For a custom / OpenAI-compatible provider that env var is `OPENAI_API_KEY`.
 
-**Recommended: the project-root `.env` (loaded by Docker Compose).** Docker Compose automatically reads a `.env` file sitting next to `docker-compose.windows.yml` and injects it into both containers. The compose file passes `OPENAI_API_KEY` straight through, so this is the simplest path and keeps the key entirely out of the `.hermes` tree:
+**Recommended: the project-root `.env`.** Docker Compose reads `.env` (next to the compose file) automatically and injects it into both containers — set up in [Quick start](#quick-start) step 2. It holds:
 
 ```bash
-# .env   (project root, next to the compose file — git-ignored)
+# .env   (project root — git-ignored)
 OPENAI_API_KEY=<your-llm.stormes.net-bearer-key>
+OPENAI_BASE_URL=https://llm.stormes.net/v1   # optional; also pre-fills the setup wizard
 ```
 
-```bash
-cp .env.example .env      # then edit .env
-docker compose -f docker-compose.windows.yml up -d   # Compose injects the key
-```
-
-> If the `hermes setup` wizard wrote `api_key:` into `.hermes/config.yaml`, delete that line. The `OPENAI_API_KEY` from the environment wins regardless, but you want the secret out of the YAML.
+The key is forwarded to the provider as a standard `Authorization: Bearer` header.
 
 **Alternative: `.hermes/.env`.** Hermes also reads `~/.hermes/.env`, which in this Docker setup is the already-mounted `.hermes/.env` (the `.hermes` volume maps to the container's Hermes home). The wizard writes this for you when you paste the key. Either location works — the project-root `.env` is just less to think about.
 
-The key is forwarded to the provider as a standard `Authorization: Bearer` header. **Both `.env` and `.hermes/.env` are git-ignored** (see [`.gitignore`](./.gitignore)); keep it that way even in a private fork.
-
-> **The project-root `.env` is the home for any secret env var.** Anything you want to set but keep out of the git repo — additional API keys, tokens, local overrides — belongs in `.env`, not in a tracked file. To actually pass one into the containers, also reference it in `docker-compose.windows.yml` under each service's `environment:` (e.g. `- MY_VAR=${MY_VAR:-}`).
+**Any other secret env var** belongs in `.env` too (extra keys, tokens, local overrides). To pass one into the containers, also reference it in `docker-compose.windows.yml` under each service's `environment:` (e.g. `- MY_VAR=${MY_VAR:-}`). Both `.env` and `.hermes/.env` are git-ignored (see [`.gitignore`](./.gitignore)); keep it that way even in a private fork.
 
 See [Model recommendations for Hermes](#model-recommendations-for-hermes) for which model to put on each auxiliary slot, and [Reasoning-loop mitigation](#reasoning-loop-mitigation) for the `thinking_budget_tokens` / `custom_providers` settings that stop the Qwen models from looping.
 

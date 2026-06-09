@@ -30,9 +30,14 @@ services:
     environment:
       - HERMES_UID=10000
       - HERMES_GID=10000
-      # Provider API key — supplied from the project-root .env (git-ignored).
-      # Copy .env.example to .env and fill it in. Keeps the key out of config.yaml.
+      # Provider API key + base URL — supplied from the project-root .env
+      # (git-ignored). Copy .env.example to .env and fill it in. Keeps the key
+      # out of config.yaml; OPENAI_BASE_URL also pre-fills the setup wizard.
       - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      - OPENAI_BASE_URL=${OPENAI_BASE_URL:-}
+      # Optional: authenticate the `claude` CLI inside the container as your
+      # logged-in Claude Pro/Max account. Generate with `claude setup-token`.
+      - CLAUDE_CODE_OAUTH_TOKEN=${CLAUDE_CODE_OAUTH_TOKEN:-}
     command: ["gateway", "run"]
 
   dashboard:
@@ -52,8 +57,12 @@ services:
       - HERMES_DASHBOARD_HOST=0.0.0.0
       - API_SERVER_ENABLED=true
       - API_SERVER_KEY=hermes-dashboard-key
-      # Provider API key — supplied from the project-root .env (git-ignored).
+      # Provider API key + base URL — supplied from the project-root .env (git-ignored).
       - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      - OPENAI_BASE_URL=${OPENAI_BASE_URL:-}
+      # Optional: authenticate the `claude` CLI inside the container as your
+      # logged-in Claude Pro/Max account. Generate with `claude setup-token`.
+      - CLAUDE_CODE_OAUTH_TOKEN=${CLAUDE_CODE_OAUTH_TOKEN:-}
     ports:
       - "127.0.0.1:9119:9119"
     command: ["dashboard", "--host", "0.0.0.0", "--port", "9119", "--no-open", "--insecure", "--tui"]

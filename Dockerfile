@@ -33,17 +33,14 @@ RUN uv pip install --python /opt/hermes/.venv/bin/python3 --no-cache \
     # neutts                      \
     scipy
 
-# Patch the dashboard's loopback-only WS client gate so the embedded chat
-# (--tui) works behind Docker Desktop's bridge NAT. See patch-ws-loopback.py
-# for the full rationale. Runs at build time; fails loudly if the upstream
-# anchor changes so a base-image bump can't silently break the fix.
+# NOTE: this image previously patched the dashboard's loopback-only WS client
+# gate (patch-ws-loopback.py) so the embedded chat (--tui) would work behind
+# Docker Desktop's bridge NAT. Upstream now handles this natively, so the patch
+# has been removed.
 #
-# SECURITY: this drops the loopback-peer requirement on the chat WebSockets in
-# --insecure mode, so anyone who can reach the dashboard port gets a full agent
-# session (shell + file access to the mounted repo). It is only safe because
-# the port is published to host loopback (127.0.0.1) in the compose file. Do
-# NOT expose the port to the LAN (0.0.0.0/9119:9119) with this patch + --insecure;
-# use gated OAuth mode instead. See docker-compose.windows.yml.
-COPY patch-ws-loopback.py /tmp/patch-ws-loopback.py
-RUN /opt/hermes/.venv/bin/python3 /tmp/patch-ws-loopback.py \
-    && rm -f /tmp/patch-ws-loopback.py
+# SECURITY: running the dashboard with --insecure still grants a full agent
+# session (shell + file access to the mounted repo) to anyone who can reach the
+# port. It is only safe because the port is published to host loopback
+# (127.0.0.1) in the compose file. Do NOT expose the port to the LAN
+# (0.0.0.0/9119:9119) with --insecure; use gated OAuth mode instead.
+# See docker-compose.windows.yml.

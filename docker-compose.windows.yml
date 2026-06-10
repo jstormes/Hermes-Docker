@@ -34,9 +34,11 @@ services:
       dockerfile: Dockerfile
     container_name: hermes
     restart: unless-stopped
+    # Land interactive shells (docker exec / the chat shell) in /projects.
+    working_dir: /projects
     volumes:
       - .hermes:/opt/data
-#      - .:/projects
+      - ./projects/:/projects
     environment:
       - HERMES_UID=10000
       - HERMES_GID=10000
@@ -53,6 +55,14 @@ services:
       - HERMES_DASHBOARD_HOST=0.0.0.0
       - HERMES_DASHBOARD_PORT=9119
       - HERMES_DASHBOARD_INSECURE=1
+      # Make the agent create new project files in /projects (the bind mount
+      # above), not the data home /opt/data. TERMINAL_CWD is where the agent's
+      # shell/file tools run (the gateway bridges it from terminal.cwd);
+      # HERMES_CWD is the TUI/chat's project dir. Hermes prints a benign
+      # startup warning suggesting terminal.cwd in config.yaml — ignore it, or
+      # set `terminal: { cwd: /projects }` in .hermes/config.yaml to silence it.
+      - TERMINAL_CWD=/projects
+      - HERMES_CWD=/projects
     ports:
       - "127.0.0.1:9119:9119"
     command: ["gateway", "run"]

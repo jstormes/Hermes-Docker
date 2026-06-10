@@ -52,7 +52,7 @@ services:
     volumes:
       - .hermes:/opt/data
 #      - .:/projects
-  environment:
+    environment:
       - HERMES_UID=10000
       - HERMES_GID=10000
       - HERMES_DASHBOARD_HOST=0.0.0.0

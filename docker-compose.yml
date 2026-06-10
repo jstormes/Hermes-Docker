@@ -1,5 +1,10 @@
 #
-# docker-compose.windows.yml — Windows Docker Desktop compatible
+# docker-compose.yml — Hermes Agent
+#
+# Cross-platform: works on Docker Desktop (Windows/macOS) and native Linux.
+# It publishes explicit ports rather than using `network_mode: host` because
+# host networking is unsupported on Docker Desktop; explicit mapping works on
+# every platform and keeps the dashboard pinned to host loopback (see SECURITY).
 #
 # SINGLE-CONTAINER model. The base image (nousresearch/hermes-agent) uses
 # s6-overlay supervision: /init is PID 1 and supervises the gateway AND the
@@ -17,7 +22,7 @@
 #     --tui is not involved (the dashboard service never passes it).
 #
 # Usage:
-#   docker compose -f docker-compose.windows.yml up -d --build
+#   docker compose up -d --build
 #
 # SECURITY: the dashboard runs with --insecure (HERMES_DASHBOARD_INSECURE=1),
 # so reaching it grants a full agent session (shell + access to the mounted
@@ -40,8 +45,13 @@ services:
       - .hermes:/opt/data
       - ./projects/:/projects
     environment:
-      - HERMES_UID=10000
-      - HERMES_GID=10000
+      # Remap the in-container hermes user to this UID/GID at boot. On Docker
+      # Desktop (Windows/macOS) ownership is handled by the file-sharing layer,
+      # so the default is fine. On native Linux, set HERMES_UID/HERMES_GID (or
+      # the PUID/PGID aliases) in .env to your host id — e.g. HERMES_UID=$(id -u)
+      # — so files the agent writes to ./projects are owned by you, not 10000.
+      - HERMES_UID=${HERMES_UID:-10000}
+      - HERMES_GID=${HERMES_GID:-10000}
       # Provider API key + base URL — supplied from the project-root .env
       # (git-ignored). Copy .env.example to .env and fill it in. Keeps the key
       # out of config.yaml; OPENAI_BASE_URL also pre-fills the setup wizard.

@@ -1,24 +1,34 @@
 #
 # docker-compose.windows.yml — Windows Docker Desktop compatible
 #
-# Differences from docker-compose.yml:
-#   - Removes `network_mode: host` (not supported on Docker Desktop for Windows)
-#   - Uses explicit port mappings instead
-#   - Uses Windows-style volume path for ~/.hermes
+# SINGLE-CONTAINER model. The base image (nousresearch/hermes-agent) uses
+# s6-overlay supervision: /init is PID 1 and supervises the gateway AND the
+# dashboard inside ONE container. Do NOT split them into two services — both
+# would mount the same /opt/data volume and collide on the gateway runtime
+# lock ("ERROR gateway.run: runtime lock is already held by another instance")
+# plus an s6-log lock on /opt/data/logs/gateways/default/lock.
+#
+# How it runs:
+#   - command: ["gateway", "run"] is the legacy single-container invocation the
+#     image still supports: container_boot seeds the default gateway state as
+#     `running` so s6 supervises it (hermes_cli/container_boot.py).
+#   - The dashboard is an s6 service toggled by env (HERMES_DASHBOARD=1), not a
+#     second container or command. It binds 0.0.0.0:9119 inside the container;
+#     --tui is not involved (the dashboard service never passes it).
 #
 # Usage:
-#   docker compose -f docker-compose.windows.yml up -d
+#   docker compose -f docker-compose.windows.yml up -d --build
 #
-# SECURITY: the dashboard runs with --insecure (no auth), so the embedded chat
-# works behind Docker's NAT without any patching (upstream handles the WS gate
-# natively). Reaching the dashboard therefore grants a full agent session
-# (shell + access to the mounted repo). The "127.0.0.1:" prefix on the port
-# mapping below is the only thing keeping this off the LAN — keep it. Never
-# change it to "9119:9119" or "0.0.0.0:..."; for network exposure switch to
-# gated OAuth mode instead.
+# SECURITY: the dashboard runs with --insecure (HERMES_DASHBOARD_INSECURE=1),
+# so reaching it grants a full agent session (shell + access to the mounted
+# repo). The "127.0.0.1:" prefix on the port mapping below is the only thing
+# keeping this off the LAN — keep it. Never change it to "9119:9119" or
+# "0.0.0.0:..."; for network exposure switch to gated OAuth mode instead
+# (register an OAuth provider via HERMES_DASHBOARD_OAUTH_CLIENT_ID and drop
+# HERMES_DASHBOARD_INSECURE — the auth gate engages on non-loopback binds).
 #
 services:
-  gateway:
+  hermes:
     build:
       context: .
       dockerfile: Dockerfile
@@ -26,7 +36,6 @@ services:
     restart: unless-stopped
     volumes:
       - .hermes:/opt/data
-      - ./hermes:/opt/hermes
 #      - .:/projects
     environment:
       - HERMES_UID=10000
@@ -39,31 +48,11 @@ services:
       # Optional: authenticate the `claude` CLI inside the container as your
       # logged-in Claude Pro/Max account. Generate with `claude setup-token`.
       - CLAUDE_CODE_OAUTH_TOKEN=${CLAUDE_CODE_OAUTH_TOKEN:-}
-    command: ["gateway", "run"]
-
-  dashboard:
-    build:
-      context: .
-      dockerfile: Dockerfile
-    container_name: hermes-dashboard
-    restart: unless-stopped
-    depends_on:
-      - gateway
-    volumes:
-      - .hermes:/opt/data
-#      - .:/projects
-    environment:
-      - HERMES_UID=10000
-      - HERMES_GID=10000
+      # Dashboard: runs as a supervised s6 service inside this same container.
+      - HERMES_DASHBOARD=1
       - HERMES_DASHBOARD_HOST=0.0.0.0
-      - API_SERVER_ENABLED=true
-      - API_SERVER_KEY=hermes-dashboard-key
-      # Provider API key + base URL — supplied from the project-root .env (git-ignored).
-      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
-      - OPENAI_BASE_URL=${OPENAI_BASE_URL:-}
-      # Optional: authenticate the `claude` CLI inside the container as your
-      # logged-in Claude Pro/Max account. Generate with `claude setup-token`.
-      - CLAUDE_CODE_OAUTH_TOKEN=${CLAUDE_CODE_OAUTH_TOKEN:-}
+      - HERMES_DASHBOARD_PORT=9119
+      - HERMES_DASHBOARD_INSECURE=1
     ports:
       - "127.0.0.1:9119:9119"
-    command: ["dashboard", "--host", "0.0.0.0", "--port", "9119", "--no-open", "--insecure", "--tui"]
+    command: ["gateway", "run"]

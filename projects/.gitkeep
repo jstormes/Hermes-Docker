@@ -1,0 +1,9 @@
+# This file only exists to keep the otherwise-empty `projects/` directory in git.
+#
+# `projects/` is the Hermes agent's workspace: it is bind-mounted to `/projects`
+# inside the container (see docker-compose.yml) and is where the agent creates
+# and edits project files. It starts empty on purpose — the agent fills it in.
+#
+# Native Linux note: this directory should be owned by your host user so files
+# the agent writes here are owned by you, not the in-container UID. Set
+# HERMES_UID / HERMES_GID in .env to your host id (e.g. `id -u` / `id -g`).

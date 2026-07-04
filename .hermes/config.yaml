@@ -1,0 +1,21 @@
+# Hermes gateway config — COMMITTABLE and secret-free.
+#
+# Every secret below is a ${VAR} reference resolved at load time from the
+# container environment (populated from the git-ignored .env via compose).
+# Boot re-serializes this file (adds _config_version, a security block, etc.)
+# but PRESERVES the ${...} references — it does not bake secrets into the file.
+# (Verified 2026-07-04.)
+#
+# IMPORTANT: referenced values must be $-free. Compose interpolates $ in .env,
+# which corrupts values like a scrypt hash — so use a PLAINTEXT dashboard
+# password (Hermes hashes it in memory), not password_hash.
+model:
+  default: Qwen3.6-35B-A3B-Q8-8060S
+  provider: custom
+  base_url: https://llm.stormes.net/v1
+  api_key: ${OPENAI_API_KEY}
+dashboard:
+  basic_auth:
+    username: operator
+    password: ${HERMES_DASH_PW}       # plaintext, from .env; keep $-free
+    secret: ${HERMES_DASH_SECRET}     # session-signing key, from .env; keep $-free

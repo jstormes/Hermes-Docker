@@ -56,6 +56,12 @@ services:
       # — so files the agent writes to ./projects are owned by you, not 10000.
       - HERMES_UID=${HERMES_UID:-10000}
       - HERMES_GID=${HERMES_GID:-10000}
+      # Dashboard basic-auth secrets, injected from .env so .hermes/config.yaml
+      # stays secret-free and committable (config.yaml references these via
+      # ${...}). Values MUST be $-free — compose interpolates $ (use a plaintext
+      # password that Hermes hashes in memory, not a scrypt hash).
+      - HERMES_DASH_PW=${HERMES_DASH_PW:-}
+      - HERMES_DASH_SECRET=${HERMES_DASH_SECRET:-}
       # Provider API key + base URL — supplied from the project-root .env
       # (git-ignored). Copy .env.example to .env and fill it in. Keeps the key
       # out of config.yaml; OPENAI_BASE_URL also pre-fills the setup wizard.

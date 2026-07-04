@@ -1,21 +1,29 @@
-# Secrets — never commit, even to a private fork.
-# Hermes reads the API key from here (mounted as ~/.hermes/.env in the container).
+# ── Secrets — never commit ──────────────────────────────────────────────
 .env
-.hermes/.env
 *.env
 !*.env.example
+.hermes/.env
 
-# Hermes runtime data — keep your config.yaml, ignore the generated/session state.
-.hermes/sessions/
-.hermes/logs/
-.hermes/trajectories/
-.hermes/cache/
-.hermes/*.log
+# ── Hermes data dir (.hermes == /opt/data) ──────────────────────────────
+# Default-deny everything the gateway writes here (runtime state + secrets),
+# then re-include ONLY the committable, secret-free files. config.yaml is safe
+# to commit because it holds ${VAR} references, not literal secrets.
+.hermes/*
+!.hermes/config.yaml
+!.hermes/SOUL.md
+!.hermes/USER.md
+# Boot writes a timestamped backup before migrating config; it can contain a
+# literal expanded key from an earlier run — never commit it.
+.hermes/config.yaml.bak-*
 
-# IDE / editor
+# Custom skills: keep them in a tracked projects/skills/ dir and point
+# config.yaml -> skills.external_dirs at it, rather than committing the bundled
+# builtin tree that boot populates under .hermes/skills/.
+
+# ── IDE / editor ────────────────────────────────────────────────────────
 .idea/
 .vscode/
 
-# OS noise
+# ── OS noise ────────────────────────────────────────────────────────────
 .DS_Store
 Thumbs.db

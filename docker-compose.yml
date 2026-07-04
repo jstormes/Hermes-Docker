@@ -37,7 +37,11 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: hermes
+    # Instance identity. HERMES_PROJECT (set per instance in .env) names the
+    # container hermes-<project>, so multiple instances never collide on the
+    # global Docker container name. Leave it unset only for a throwaway single
+    # instance (falls back to hermes-default).
+    container_name: hermes-${HERMES_PROJECT:-default}
     restart: unless-stopped
     # Land interactive shells (docker exec / the chat shell) in /projects.
     working_dir: /projects
@@ -74,5 +78,14 @@ services:
       - TERMINAL_CWD=/projects
       - HERMES_CWD=/projects
     ports:
-      - "127.0.0.1:9119:9119"
+      # Host-side dashboard port comes from HERMES_PORT (.env); keep the
+      # container side 9119. Give each instance a distinct HERMES_PORT.
+      - "127.0.0.1:${HERMES_PORT:-9119}:9119"
+    extra_hosts:
+      # cloud1's LAN IP. llm.stormes.net resolves to cloud1's PUBLIC IP, which
+      # the shared firewall won't hairpin back from inside the LAN — so pin the
+      # name to the LAN IP here (SNI stays llm.stormes.net, so the Let's Encrypt
+      # cert still matches). Without this the agent logs in but every chat times
+      # out. Containers don't inherit the hermes1 host's /etc/hosts, hence this.
+      - "llm.stormes.net:192.168.9.223"
     command: ["gateway", "run"]

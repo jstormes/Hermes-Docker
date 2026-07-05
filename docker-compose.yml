@@ -43,6 +43,18 @@ services:
     # instance (falls back to hermes-default).
     container_name: hermes-${HERMES_PROJECT:-default}
     restart: unless-stopped
+    # --- Per-instance resource ceilings (fleet DoS containment) ------------------
+    # Guards, not tight quotas: sized above a normal browsing agent (chromium + node
+    # + python) so one runaway / leaking / fork-bombing instance can't starve hermes1
+    # and take down the whole fleet. Override per instance in .env if a workload
+    # genuinely needs more. See AGENT-ACCESS-DESIGN.md (layered defense).
+    mem_limit: ${HERMES_MEM_LIMIT:-4g}
+    cpus: ${HERMES_CPUS:-2}
+    pids_limit: ${HERMES_PIDS_LIMIT:-2048}
+    ulimits:
+      nofile:
+        soft: ${HERMES_NOFILE:-8192}
+        hard: ${HERMES_NOFILE:-8192}
     # Land interactive shells (docker exec / the chat shell) in /projects.
     working_dir: /projects
     volumes:
@@ -51,11 +63,17 @@ services:
     environment:
       # Remap the in-container hermes user to this UID/GID at boot. On Docker
       # Desktop (Windows/macOS) ownership is handled by the file-sharing layer,
-      # so the default is fine. On native Linux, set HERMES_UID/HERMES_GID (or
-      # the PUID/PGID aliases) in .env to your host id — e.g. HERMES_UID=$(id -u)
-      # — so files the agent writes to ./projects are owned by you, not 10000.
+      # so the default is fine. On native Linux (the hermes1 fleet) set these in
+      # .env to the instance's DEDICATED host user (hermes-<project>, uid 1000X) so
+      # the agent runs isolated from every other instance, and the files it writes
+      # to ./projects are owned by that user. See PROVISIONING-PHASE-1.md Step 3.
       - HERMES_UID=${HERMES_UID:-10000}
       - HERMES_GID=${HERMES_GID:-10000}
+      # Keep the gateway home (/opt/data) at setgid 2770 so the operator (a member
+      # of the instance's group) can reach .hermes without sudo — otherwise the
+      # gateway re-chmods it to 0700 on every config load. MUST be forwarded here or
+      # the .env value never reaches the gateway. See PROVISIONING-PHASE-1.md Step 5.
+      - HERMES_HOME_MODE=${HERMES_HOME_MODE:-2770}
       # Dashboard basic-auth secrets, injected from .env so .hermes/config.yaml
       # stays secret-free and committable (config.yaml references these via
       # ${...}). Values MUST be $-free — compose interpolates $ (use a plaintext

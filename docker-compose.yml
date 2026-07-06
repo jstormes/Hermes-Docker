@@ -24,13 +24,17 @@
 # Usage:
 #   docker compose up -d --build
 #
-# SECURITY: the dashboard runs with --insecure (HERMES_DASHBOARD_INSECURE=1),
-# so reaching it grants a full agent session (shell + access to the mounted
-# repo). The "127.0.0.1:" prefix on the port mapping below is the only thing
-# keeping this off the LAN — keep it. Never change it to "9119:9119" or
-# "0.0.0.0:..."; for network exposure switch to gated OAuth mode instead
-# (register an OAuth provider via HERMES_DASHBOARD_OAUTH_CLIENT_ID and drop
-# HERMES_DASHBOARD_INSECURE — the auth gate engages on non-loopback binds).
+# SECURITY: the dashboard binds 0.0.0.0 INSIDE the container, so its auth gate
+# engages (a non-loopback bind REQUIRES an auth provider). config.yaml ships a
+# `basic_auth` block that satisfies this — you MUST set HERMES_DASH_PW and
+# HERMES_DASH_SECRET in .env or the dashboard refuses to bind. NOTE:
+# HERMES_DASHBOARD_INSECURE=1 / --insecure is a NO-OP on current images (the
+# June 2026 hardening) — it does NOT disable auth. Reaching a logged-in session
+# grants a full agent session (shell + access to the mounted repo), so the
+# "127.0.0.1:" prefix on the host port mapping below still matters: it keeps the
+# PUBLISHED port off the LAN — keep it. Never change it to "9119:9119" or
+# "0.0.0.0:...". For gated OAuth instead of basic_auth, register a provider via
+# HERMES_DASHBOARD_OAUTH_CLIENT_ID.
 #
 services:
   hermes:
@@ -66,13 +70,13 @@ services:
       # so the default is fine. On native Linux (the hermes1 fleet) set these in
       # .env to the instance's DEDICATED host user (hermes-<project>, uid 1000X) so
       # the agent runs isolated from every other instance, and the files it writes
-      # to ./projects are owned by that user. See PROVISIONING-PHASE-1.md Step 3.
+      # to ./projects are owned by that user. See PROVISIONING-HERMES-1.md Step 3.
       - HERMES_UID=${HERMES_UID:-10000}
       - HERMES_GID=${HERMES_GID:-10000}
       # Keep the gateway home (/opt/data) at setgid 2770 so the operator (a member
       # of the instance's group) can reach .hermes without sudo — otherwise the
       # gateway re-chmods it to 0700 on every config load. MUST be forwarded here or
-      # the .env value never reaches the gateway. See PROVISIONING-PHASE-1.md Step 5.
+      # the .env value never reaches the gateway. See PROVISIONING-HERMES-1.md Step 5.
       - HERMES_HOME_MODE=${HERMES_HOME_MODE:-2770}
       # Dashboard basic-auth secrets, injected from .env so .hermes/config.yaml
       # stays secret-free and committable (config.yaml references these via
@@ -92,6 +96,9 @@ services:
       - HERMES_DASHBOARD=1
       - HERMES_DASHBOARD_HOST=0.0.0.0
       - HERMES_DASHBOARD_PORT=9119
+      # NO-OP on current images (June 2026 hardening): auth is enforced by the
+      # config.yaml basic_auth block regardless of this flag. Kept only for
+      # older-image compatibility; it does NOT disable the auth gate.
       - HERMES_DASHBOARD_INSECURE=1
       # Make the agent create new project files in /projects (the bind mount
       # above), not the data home /opt/data. TERMINAL_CWD is where the agent's
